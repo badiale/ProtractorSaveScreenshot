@@ -1,5 +1,7 @@
 var fs = require("fs");
 
+var openStreams = [];
+
 exports.config = {
     specs: ["throwErrorTest.js"],
 
@@ -10,6 +12,24 @@ exports.config = {
             takeScreenshotAndSave(this.result.fullName);
             return originalAddExpectationResult.apply(this, arguments);
         };
+    },
+
+    afterLaunch: function () {
+        var defer = protractor.promise.defer();
+        openStreams.forEach(function (stream) {
+            stream.on("end", function () {
+                removeStream(stream);
+                resolve();
+            });
+        });
+        resolve();
+        return defer.promise;
+
+        function resolve() {
+            if (openStreams.length === 0) {
+                defer.resolve();
+            }
+        }
     },
 
     baseUrl: "https://angularjs.org/",
@@ -34,6 +54,15 @@ function takeScreenshotAndSave(name) {
 function saveFile(fileName, data) {
     console.log("writing", fileName, "with data", data);
     var stream = fs.createWriteStream(fileName);
-    stream.write(data);
-    stream.end();
+    stream.end(data, function () {
+        removeStream(stream);
+    });
+    openStreams.push(stream);
+}
+
+function removeStream(stream) {
+    var index = openStreams.indexOf(stream);
+    if (index !== -1) {
+        openStreams.slice(index, 1);
+    }
 }
